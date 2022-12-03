@@ -27,7 +27,27 @@ pub fn part_one(input: &str) -> Option<u32> {
 }
 
 pub fn part_two(input: &str) -> Option<u32> {
-    None
+    let rucksacks: Vec<_> = input.lines().collect();
+    Some(rucksacks.chunks(3).fold(0, |sum, chunk| {
+        let mut chunk_sacks = Vec::from(chunk);
+        chunk_sacks.sort();
+
+        match chunk_sacks.last() {
+            Some(l) => {
+                let mut result: Vec<char> = l
+                    .chars()
+                    .filter(|c| {
+                        chunk_sacks[0..chunk_sacks.len() - 1]
+                            .iter()
+                            .all(|sack| sack.contains(&c.to_string()))
+                    })
+                    .collect();
+                result.dedup();
+                sum + get_char_code(result) as u32
+            }
+            None => panic!("cannot find longest str"),
+        }
+    }))
 }
 
 fn main() {
@@ -42,10 +62,6 @@ mod tests {
 
     #[test]
     fn test_part_one() {
-        println!(
-            "a: {}, z: {}, A: {}, Z: {}",
-            'a' as u8, 'z' as u8, 'A' as u8, 'Z' as u8
-        );
         let input = advent_of_code::read_file("examples", 3);
 
         assert_eq!(part_one(&input), Some(157));
@@ -54,6 +70,6 @@ mod tests {
     #[test]
     fn test_part_two() {
         let input = advent_of_code::read_file("examples", 3);
-        assert_eq!(part_two(&input), None);
+        assert_eq!(part_two(&input), Some(70));
     }
 }
