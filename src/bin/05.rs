@@ -86,6 +86,20 @@ fn move_stacks<'a, 'b>(
     stacks
 }
 
+fn move_stacks_with_preserve<'a, 'b>(
+    mut stacks: HashMap<i32, LinkedList<&'a str>>,
+    command: &'b Command,
+) -> HashMap<i32, LinkedList<&'a str>> {
+    let from_stack = stacks.get_mut(&command.stack_from_num).unwrap();
+    let items: Vec<_> = (0..command.amount)
+        .map(|_| from_stack.pop_back().unwrap())
+        .into_iter()
+        .collect();
+    let to_stack = stacks.get_mut(&command.stack_to_num).unwrap();
+    items.iter().rev().for_each(|item| to_stack.push_back(item));
+    stacks
+}
+
 fn get_result(stacks: HashMap<i32, LinkedList<&str>>) -> String {
     let mut keys: Vec<_> = stacks.keys().collect();
     keys.sort();
@@ -127,7 +141,7 @@ pub fn part_two(input: &str) -> Option<String> {
 
     for line in moves.lines() {
         let cmd = Command::from(line);
-        stacks = move_stacks(stacks, &cmd);
+        stacks = move_stacks_with_preserve(stacks, &cmd);
     }
 
     Some(get_result(stacks))
