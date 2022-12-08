@@ -1,16 +1,16 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, rc::Rc, vec};
 
 struct Folder {
-    pub parent: Option<Rc<RefCell<Folder>>>,
-    pub name: String,
-    pub files: Vec<Rc<RefCell<File>>>,
-    pub folders: Vec<Rc<RefCell<Folder>>>,
-    pub size: i32,
+    parent: Option<Rc<RefCell<Folder>>>,
+    name: String,
+    files: Vec<Rc<RefCell<File>>>,
+    folders: Vec<Rc<RefCell<Folder>>>,
+    size: i32,
 }
 
 struct File {
-    pub size: i32,
-    pub name: String,
+    size: i32,
+    name: String,
 }
 
 impl File {
@@ -63,10 +63,28 @@ impl Folder {
                 .map(|folder| folder.borrow().get_total_size(threshhold))
                 .sum::<i32>()
     }
+
+    fn get_closest_folder_to_size(&self, threshhold: i32, minimum: i32) -> i32 {
+        let curr_folder_size = self.get_folder_size();
+        let subfolders_size = self
+            .folders
+            .iter()
+            .map(|folder| {
+                folder
+                    .borrow()
+                    .get_closest_folder_to_size(threshhold, minimum)
+            })
+            .filter(|folder_size| *folder_size >= minimum)
+            .collect::<Vec<_>>();
+        let mut sizes = vec![vec![curr_folder_size], subfolders_size].concat();
+        sizes.sort_by(|a, b| {
+            (((*a - threshhold) as i32).abs()).cmp(&((*b - threshhold) as i32).abs())
+        });
+        *(sizes.first().unwrap_or(&0))
+    }
 }
 
-pub fn part_one(input: &str) -> Option<u32> {
-    let threshhold = 100000;
+fn build_tree(input: &str) -> Rc<RefCell<Folder>> {
     let root_folder = Rc::new(RefCell::new(Folder::new("/".to_string(), None)));
     let mut curr_folder = Rc::clone(&root_folder);
     for line in input.lines() {
@@ -104,16 +122,33 @@ pub fn part_one(input: &str) -> Option<u32> {
             }
         }
     }
+    root_folder
+}
+pub fn part_one(input: &str) -> Option<u32> {
+    let threshhold = 100000;
+    let root_folder = build_tree(input);
     let sum = root_folder.borrow().get_total_size(threshhold) as u32;
     Some(sum)
 }
 
 pub fn part_two(input: &str) -> Option<u32> {
-    None
+    let threshhold = 30000000;
+    let root_folder = build_tree(input);
+    let total_size = root_folder.borrow().get_folder_size();
+    let min_size = 30_000_000 - (70_000_000 - total_size);
+    println!("total size: {}, min size: {}", total_size, min_size);
+    let closest = root_folder
+        .borrow()
+        .get_closest_folder_to_size(threshhold, min_size) as u32;
+    Some(closest)
 }
 
 fn main() {
     let input = &advent_of_code::read_file("inputs", 7);
+    let threshhold = 30000000;
+    let mut sizes = vec![584, 94853, 24933642, 48381165, 48381167];
+    sizes.sort_by(|a, b| (((*a - threshhold) as i32).abs()).cmp(&((*b - threshhold) as i32).abs()));
+    println!("{:?}", sizes);
     advent_of_code::solve!(1, part_one, input);
     advent_of_code::solve!(2, part_two, input);
 }
@@ -131,6 +166,6 @@ mod tests {
     #[test]
     fn test_part_two() {
         let input = advent_of_code::read_file("examples", 7);
-        assert_eq!(part_two(&input), None);
+        assert_eq!(part_two(&input), Some(24933642));
     }
 }
