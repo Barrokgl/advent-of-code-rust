@@ -1,6 +1,8 @@
 use lazy_static::lazy_static;
 use regex::Regex;
+use rgb::RGB8;
 use std::{collections::HashSet, iter};
+use textplots::{Chart, ColorPlot, Plot, Shape};
 
 #[derive(Copy, Clone, Debug)]
 enum Direction {
@@ -57,6 +59,12 @@ impl Point {
         dx + dy == 1 || (dx <= 1 && dy <= 1)
     }
 
+    fn distance(&self, other: &Point) -> i32 {
+        let dx = (self.x - other.x).abs();
+        let dy = (self.y - other.y).abs();
+        dx + dy
+    }
+
     fn is_overlap_with(&self, other: &Point) -> bool {
         self.x == other.x && self.y == other.y
     }
@@ -93,31 +101,96 @@ impl Point {
     fn is_same_plane(&self, other: &Point) -> bool {
         self.x == other.x || self.y == other.y
     }
+
+    fn follow(&self, other: &Point) -> Point {
+        if self.distance(other) <= 1 {
+            return self.clone();
+        } else {
+            let mut x = self.x.clamp(other.x - 1, other.x + 1);
+            let mut y = self.y.clamp(other.y - 1, other.y + 1);
+
+            if x == self.x {
+                x = other.x
+            } else if y == self.y {
+                y = other.y
+            }
+            Point::new(x, y)
+        }
+    }
 }
 
 fn simulate_rope(commands: Vec<Direction>) -> i32 {
-    let head = Point::new(0, 0);
-    let tail = Point::new(0, 0);
+    let head = Point::new(1, 1);
+    let tail = Point::new(1, 1);
     let (result_set, _, _): (HashSet<Point>, Point, Point) =
         commands
             .iter()
             .fold((HashSet::new(), head, tail), |(mut set, head, tail), d| {
                 let new_head = head.move_point(d);
-                let new_tail =
-                    match tail.is_adjacent_to(&new_head) || tail.is_overlap_with(&new_head) {
-                        true => tail,
-                        false => {
-                            if tail.is_same_plane(&new_head) {
-                                tail.move_point(d)
-                            } else {
-                                let dir = tail.get_quadrant_direction(&new_head);
-                                tail.move_by_diagonal(&dir)
-                            }
-                        }
-                    };
+                let new_tail = tail.follow(&new_head);
+
+                Chart::new_with_y_range(180, 60, -6.0, 6.0, -6.0, 6.0)
+                    .linecolorplot(
+                        &Shape::Points(&[
+                            (new_tail.x as f32, new_tail.y as f32),
+                            (new_head.x as f32, new_head.y as f32),
+                        ]),
+                        RGB8 {
+                            r: 255_u8,
+                            g: 0,
+                            b: 0,
+                        },
+                    )
+                    .nice();
                 set.insert(new_tail);
 
                 (set, new_head, new_tail)
+            });
+    result_set.len() as i32
+}
+
+fn simulate_rope_n(commands: Vec<Direction>, particles: usize) -> i32 {
+    let particles: Vec<Point> = iter::repeat(Point::new(1, 1)).take(particles).collect();
+
+    let (result_set, _): (HashSet<Point>, Vec<Point>) =
+        commands
+            .iter()
+            .fold((HashSet::new(), particles), |(mut set, particles), d| {
+                // TODO: apply movement for each particle
+                // let mut head: Option<&Point> = None;
+                let (_, new_particles) = particles.iter().fold(
+                    (None, Vec::new()),
+                    |(head, result): (Option<Point>, Vec<Point>), particle| {
+                        if let Some(h) = head {
+                            let new_particle = particle.follow(&h);
+                            (
+                                Some(new_particle),
+                                vec![vec![new_particle], result].concat(),
+                            )
+                        } else {
+                            let new_head = particle.move_point(d);
+
+                            (Some(new_head), vec![vec![new_head], result].concat())
+                        }
+                    },
+                );
+                let points = new_particles
+                    .iter()
+                    .map(|p| (p.x as f32, p.y as f32))
+                    .collect::<Vec<_>>();
+                Chart::new_with_y_range(180, 60, 0.0, 6.0, 0.0, 6.0)
+                    .linecolorplot(
+                        &Shape::Points(points.as_slice()),
+                        RGB8 {
+                            r: 255_u8,
+                            g: 0,
+                            b: 0,
+                        },
+                    )
+                    .nice();
+                set.insert(*new_particles.first().unwrap());
+
+                (set, new_particles)
             });
     result_set.len() as i32
 }
@@ -134,7 +207,14 @@ pub fn part_one(input: &str) -> Option<u32> {
 }
 
 pub fn part_two(input: &str) -> Option<u32> {
-    None
+    let commands: Vec<Direction> = input
+        .lines()
+        .map(|line| parse_command(line))
+        .flatten()
+        .collect();
+    let number_of_points = simulate_rope_n(commands, 10);
+
+    Some(number_of_points as u32)
 }
 
 fn main() {
@@ -156,6 +236,6 @@ mod tests {
     #[test]
     fn test_part_two() {
         let input = advent_of_code::read_file("examples", 9);
-        assert_eq!(part_two(&input), None);
+        assert_eq!(part_two(&input), Some(0));
     }
 }
